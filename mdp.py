@@ -72,3 +72,16 @@ class TradeExecutionEnv(gym.Env):
         max_outcome = self.units_to_sell * self._data.iloc[self._start+1:self.horizon+1]["Close"].max()
         min_outcome = self.units_to_sell * self._data.iloc[self._start+1:self.horizon+1]["Close"].min()
         return -(max_outcome - self.total_income) / (max_outcome - min_outcome)
+
+
+class DiscreteTradeSizeWrapper(gym.Wrapper):
+    def __init__(self, env, trade_sizes):
+        super().__init__(env)
+        self.trade_sizes = trade_sizes
+        self.action_space = gym.spaces.Discrete(len(trade_sizes))
+
+    def step(self, action):
+        return self.env.step(self.trade_sizes[action])
+
+    def reset(self, *args, **kwargs):
+        return self.env.reset(*args, **kwargs)
