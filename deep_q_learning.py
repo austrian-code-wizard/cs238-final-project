@@ -11,8 +11,8 @@ from mdp import TradeExecutionEnv, DiscreteTradeSizeWrapper
 
 
 SEED = 42
-HORIZON = 5 * 12 * 8
-UNITS_TO_SELL = 240
+HORIZON = 5 * 12 * 0.5
+UNITS_TO_SELL = 12
 
 env = TradeExecutionEnv()
 
@@ -64,6 +64,56 @@ class QNetwork(nn.Module):
         return action_index.item()
 
 
+class QRNNetwork(nn.Module):
+    def __init__(self, state_size, action_size):
+        super(QRNNetwork, self).__init__()
+
+        self.rnn = nn.LSTM(state_size, 64, 4, batch_first=True)
+        self.fc1 = nn.Linear(64, 64)
+        self.relu = nn.ReLU()
+        self.fc_value = nn.Linear(64, 256)
+        self.fc_adv = nn.Linear(64, 256)
+
+        self.value = nn.Linear(256, 1)
+        self.adv = nn.Linear(256, action_size)
+
+    def _parse_state(self, state):
+        data = torch.FloatTensor([
+            state["low"].to_numpy(),
+            state["high"].to_numpy(),
+            state["close"].to_numpy(),
+            state["open"].to_numpy(),
+            state["volume"].to_numpy(),
+        ]).T
+        return torch.concat([
+            data,
+            torch.repeat_interleave(torch.FloatTensor([[state["units_sold"]]]), 6, 0),
+            torch.repeat_interleave(torch.FloatTensor([[state["cost_basis"]]]), 6, 0),
+        ], dim=1)
+
+    def forward(self, state):
+        state = torch.stack([self._parse_state(state)] if isinstance(state, dict) else [self._parse_state(s) for s in state])
+        state = state.to(device)
+        y, _ = self.rnn(state)
+        y = self.relu(self.fc1(y[:, -1, :]))
+        value = self.relu(self.fc_value(y))
+        adv = self.relu(self.fc_adv(y))
+
+        value = self.value(value)
+        adv = self.adv(adv)
+
+        advAverage = torch.mean(adv, dim=1, keepdim=True)
+        Q = value + adv - advAverage
+
+        return Q
+
+    def select_action(self, state):
+        with torch.no_grad():
+            Q = self.forward(state)
+            action_index = torch.argmax(Q, dim=1)
+        return action_index.item()
+
+
 class Memory(object):
     def __init__(self, memory_size: int) -> None:
         self.memory_size = memory_size
@@ -89,8 +139,8 @@ class Memory(object):
         self.buffer.clear()
 
 
-onlineQNetwork = QNetwork(6, 10).to(device)
-targetQNetwork = QNetwork(6, 10).to(device)
+onlineQNetwork = QRNNetwork(7, 10).to(device)
+targetQNetwork = QRNNetwork(7, 10).to(device)
 targetQNetwork.load_state_dict(onlineQNetwork.state_dict())
 
 optimizer = torch.optim.Adam(onlineQNetwork.parameters(), lr=1e-4)
@@ -116,7 +166,6 @@ episode_reward = 0
 for epoch in count():
 
     state = env.reset(UNITS_TO_SELL, HORIZON, SEED)
-    state = [state["open"], state["high"], state["low"], state["close"], state["volume"], state["units_to_sell"] - state["units_sold"]]
     episode_reward = 0
     done = False
     while not done:
@@ -124,10 +173,8 @@ for epoch in count():
         if p < epsilon:
             action = random.randint(0, 1)
         else:
-            tensor_state = torch.FloatTensor(state).unsqueeze(0).to(device)
-            action = onlineQNetwork.select_action(tensor_state)
+            action = onlineQNetwork.select_action(state)
         next_state, reward, done, _, _ = env.step(action)
-        next_state = [next_state["open"], next_state["high"], next_state["low"], next_state["close"], next_state["volume"], next_state["units_to_sell"] - next_state["units_sold"]]
         episode_reward += reward
         memory_replay.add((state, next_state, action, reward, done))
         if memory_replay.size() > 128:
@@ -140,8 +187,6 @@ for epoch in count():
             batch = memory_replay.sample(BATCH, False)
             batch_state, batch_next_state, batch_action, batch_reward, batch_done = zip(*batch)
 
-            batch_state = torch.FloatTensor(batch_state).to(device)
-            batch_next_state = torch.FloatTensor(batch_next_state).to(device)
             batch_action = torch.FloatTensor(batch_action).unsqueeze(1).to(device)
             batch_reward = torch.FloatTensor(batch_reward).unsqueeze(1).to(device)
             batch_done = torch.FloatTensor(batch_done).unsqueeze(1).to(device)
