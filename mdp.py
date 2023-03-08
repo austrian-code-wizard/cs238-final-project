@@ -37,6 +37,10 @@ class TradeExecutionEnv(gym.Env):
         self._start = np.random.randint(6, len(self._data) - horizon)
         self.current_step = self._start
         self.horizon = horizon + self.current_step
+        self.max_price = max(self._data.iloc[int(self._start-6):int(self.horizon+1)]["High"].max(), self._data.iloc[int(self._start-6):int(self.horizon+1)]["Low"].max(), self._data.iloc[int(self._start-6):int(self.horizon+1)]["Open"].max(), self._data.iloc[int(self._start-6):int(self.horizon+1)]["Close"].max())
+        self.min_price = min(self._data.iloc[int(self._start-6):int(self.horizon+1)]["High"].min(), self._data.iloc[int(self._start-6):int(self.horizon+1)]["Low"].min(), self._data.iloc[int(self._start-6):int(self.horizon+1)]["Open"].min(), self._data.iloc[int(self._start-6):int(self.horizon+1)]["Close"].min())
+        self.max_volume = self._data.iloc[int(self._start-6):int(self.horizon+1)]["Volume"].max()
+        self.min_volume = self._data.iloc[int(self._start-6):int(self.horizon+1)]["Volume"].min()
         return self._get_observation()
 
     def step(self, action):

@@ -11,22 +11,23 @@ from mdp import TradeExecutionEnv, DiscreteTradeSizeWrapper
 
 
 SEED = 42
-HORIZON = 5 * 12 * 0.5
-UNITS_TO_SELL = 12
+#HORIZON = 5 * 12 * 0.5
+HORIZON = 50
+UNITS_TO_SELL = 2
 
 env = TradeExecutionEnv()
 
 trade_sizes = {
   0: 0,
   1: 1,
-  2: 2,
-  3: 4,
-  4: 8,
-  5: 16,
-  6: 32,
-  7: 64,
-  8: 128,
-  9: 240
+ # 2: 2,
+ # 3: 4,
+ # 4: 8,
+ # 5: 16,
+ # 6: 32,
+ # 7: 64,
+ # 8: 128,
+ # 9: 240
 }
 env = DiscreteTradeSizeWrapper(env, trade_sizes)
 
@@ -139,8 +140,8 @@ class Memory(object):
         self.buffer.clear()
 
 
-onlineQNetwork = QRNNetwork(7, 10).to(device)
-targetQNetwork = QRNNetwork(7, 10).to(device)
+onlineQNetwork = QRNNetwork(len(env.observation_space), len(trade_sizes)).to(device)
+targetQNetwork = QRNNetwork(len(env.observation_space), len(trade_sizes)).to(device)
 targetQNetwork.load_state_dict(onlineQNetwork.state_dict())
 
 optimizer = torch.optim.Adam(onlineQNetwork.parameters(), lr=1e-4)
