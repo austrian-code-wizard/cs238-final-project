@@ -7,7 +7,7 @@ class TradeExecutionEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
 
     def __init__(self, data_path: str = "./data/5m_intraday_data.csv"):
-        self._data = pd.read_csv(data_path)
+        self._data = pd.read_csv(data_path).interpolate()
         self.action_space = Box(low=0, high=np.inf, shape=(1,), dtype=np.int32)
         self.observation_space = {
             "open": Box(low=0, high=np.inf, shape=(6,)),
@@ -16,7 +16,8 @@ class TradeExecutionEnv(gym.Env):
             "close": Box(low=0, high=np.inf, shape=(6,)),
             "volume": Box(low=0, high=np.inf, shape=(6,)),
             "units_sold": Box(low=0, high=np.inf, shape=(1,)),
-            "cost_basis": Box(low=0, high=np.inf, shape=(1,))
+            "cost_basis": Box(low=0, high=np.inf, shape=(1,)),
+            "steps_left": Box(low=0, high=np.inf, shape=(1,))
         }
         self.units_sold = None
         self.units_to_sell = None
@@ -75,6 +76,7 @@ class TradeExecutionEnv(gym.Env):
             "volume": self.normalize_volume(self._data.iloc[self.current_step - 6 : self.current_step]["Volume"]),
             "units_sold": self.units_sold / self.units_to_sell,
             "cost_basis": self.normalize_price(self.total_income / self.units_sold) if self.units_sold > 0 else 0,
+            "steps_left": (self.horizon - self.current_step) / (self.horizon - self._start)
         }
 
     def _get_reward(self, done):

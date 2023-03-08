@@ -8,26 +8,26 @@ from collections import deque
 from itertools import count
 import torch.nn.functional as F
 from mdp import TradeExecutionEnv, DiscreteTradeSizeWrapper
+from tensorboardX import SummaryWriter
 
 
 SEED = 42
-#HORIZON = 5 * 12 * 0.5
-HORIZON = 50
-UNITS_TO_SELL = 2
+HORIZON = 5 * 12 * 8
+UNITS_TO_SELL = 250
 
 env = TradeExecutionEnv()
 
 trade_sizes = {
   0: 0,
   1: 1,
- # 2: 2,
- # 3: 4,
- # 4: 8,
- # 5: 16,
- # 6: 32,
- # 7: 64,
- # 8: 128,
- # 9: 240
+  2: 2,
+  3: 4,
+  4: 8,
+  5: 16,
+  6: 32,
+  7: 64,
+  8: 128,
+  9: 250
 }
 env = DiscreteTradeSizeWrapper(env, trade_sizes)
 
@@ -90,6 +90,7 @@ class QRNNetwork(nn.Module):
             data,
             torch.repeat_interleave(torch.FloatTensor([[state["units_sold"]]]), 6, 0),
             torch.repeat_interleave(torch.FloatTensor([[state["cost_basis"]]]), 6, 0),
+            torch.repeat_interleave(torch.FloatTensor([[state["steps_left"]]]), 6, 0),
         ], dim=1)
 
     def forward(self, state):
@@ -99,13 +100,11 @@ class QRNNetwork(nn.Module):
         y = self.relu(self.fc1(y[:, -1, :]))
         value = self.relu(self.fc_value(y))
         adv = self.relu(self.fc_adv(y))
-
         value = self.value(value)
         adv = self.adv(adv)
 
         advAverage = torch.mean(adv, dim=1, keepdim=True)
         Q = value + adv - advAverage
-
         return Q
 
     def select_action(self, state):
@@ -145,13 +144,16 @@ targetQNetwork = QRNNetwork(len(env.observation_space), len(trade_sizes)).to(dev
 targetQNetwork.load_state_dict(onlineQNetwork.state_dict())
 
 optimizer = torch.optim.Adam(onlineQNetwork.parameters(), lr=1e-4)
+writer = SummaryWriter('logs/dqn')
 
 GAMMA = 1
-EXPLORE = 20000
+EXPLORE = 4000
 INITIAL_EPSILON = 0.1
 FINAL_EPSILON = 0.0001
 REPLAY_MEMORY = 20000
 BATCH = 16
+EPOCHS = 5000
+EVAL_EPOCHS = 100
 
 UPDATE_STEPS = 4
 
@@ -164,7 +166,7 @@ begin_learn = False
 episode_reward = 0
 
 # onlineQNetwork.load_state_dict(torch.load('ddqn-policy.para'))
-for epoch in count():
+for epoch in range(EPOCHS):
 
     state = env.reset(UNITS_TO_SELL, HORIZON, SEED)
     episode_reward = 0
@@ -202,6 +204,7 @@ for epoch in count():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            writer.add_scalar('loss', loss.item(), global_step=learn_steps)
 
             if epsilon > FINAL_EPSILON:
                 epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE
@@ -209,7 +212,22 @@ for epoch in count():
         if done:
             break
         state = next_state
-
+    writer.add_scalar('episode reward', episode_reward, global_step=epoch)
     if epoch % 10 == 0:
         torch.save(onlineQNetwork.state_dict(), 'ddqn-policy.para')
         print('Ep {}\tMoving average score: {:.2f}\t'.format(epoch, episode_reward))
+
+rewards = []
+for epoch in range(EVAL_EPOCHS):
+    state = env.reset(UNITS_TO_SELL, HORIZON, SEED)
+    episode_reward = 0
+    done = False
+    while not done:
+        action = onlineQNetwork.select_action(state)
+        next_state, reward, done, _, _ = env.step(action)
+        episode_reward += reward
+        if done:
+            break
+        state = next_state
+    rewards.append(episode_reward)
+print('Average reward: {}'.format(np.mean(rewards)))
