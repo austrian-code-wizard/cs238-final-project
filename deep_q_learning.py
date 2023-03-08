@@ -68,23 +68,23 @@ class QRNNetwork(nn.Module):
     def __init__(self, state_size, action_size):
         super(QRNNetwork, self).__init__()
 
-        self.rnn = nn.LSTM(state_size, 64, 4, batch_first=True)
-        self.fc1 = nn.Linear(64, 64)
+        self.rnn = nn.LSTM(state_size, 32, 1, batch_first=True)
+        self.fc1 = nn.Linear(32, 64)
         self.relu = nn.ReLU()
-        self.fc_value = nn.Linear(64, 256)
-        self.fc_adv = nn.Linear(64, 256)
+        self.fc_value = nn.Linear(64, 64)
+        self.fc_adv = nn.Linear(64, 64)
 
-        self.value = nn.Linear(256, 1)
-        self.adv = nn.Linear(256, action_size)
+        self.value = nn.Linear(64, 1)
+        self.adv = nn.Linear(64, action_size)
 
     def _parse_state(self, state):
-        data = torch.FloatTensor([
+        data = torch.FloatTensor(np.stack([
             state["low"].to_numpy(),
             state["high"].to_numpy(),
             state["close"].to_numpy(),
             state["open"].to_numpy(),
             state["volume"].to_numpy(),
-        ]).T
+        ])).T
         return torch.concat([
             data,
             torch.repeat_interleave(torch.FloatTensor([[state["units_sold"]]]), 6, 0),
@@ -146,7 +146,7 @@ targetQNetwork.load_state_dict(onlineQNetwork.state_dict())
 optimizer = torch.optim.Adam(onlineQNetwork.parameters(), lr=1e-4)
 
 GAMMA = 1
-EXPLORE = 2000
+EXPLORE = 20000
 INITIAL_EPSILON = 0.1
 FINAL_EPSILON = 0.0001
 REPLAY_MEMORY = 20000

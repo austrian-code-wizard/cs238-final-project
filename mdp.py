@@ -77,8 +77,8 @@ class TradeExecutionEnv(gym.Env):
         if not done: return 0
         if self.units_sold != self.units_to_sell:
             return -10
-        max_outcome = self.units_to_sell * self._data.iloc[self._start+1:self.horizon+1]["Close"].max()
-        min_outcome = self.units_to_sell * self._data.iloc[self._start+1:self.horizon+1]["Close"].min()
+        max_outcome = self.units_to_sell * self._data.iloc[int(self._start+1):int(self.horizon+1)]["Close"].max()
+        min_outcome = self.units_to_sell * self._data.iloc[int(self._start+1):int(self.horizon+1)]["Close"].min()
         return -(max_outcome - self.total_income) / (max_outcome - min_outcome)
 
 
