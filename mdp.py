@@ -62,12 +62,10 @@ class TradeExecutionEnv(gym.Env):
         return self._get_observation(), self._get_reward(done), done, False, {}
 
     def normalize_price(self, price):
-        #return 2 * (price - self.min_price) / (self.max_price - self.min_price) - 1
-        return price
+        return 2 * (price - self.min_price) / (self.max_price - self.min_price) - 1
 
     def normalize_volume(self, volume):
-        #return 2 * (volume - self.min_volume) / (self.max_volume - self.min_volume) - 1
-        return volume
+        return 2 * (volume - self.min_volume) / (self.max_volume - self.min_volume) - 1
 
     def _get_observation(self):
         return {
