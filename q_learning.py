@@ -5,7 +5,7 @@ from mdp import TradeExecutionEnv, DiscreteTradeSizeWrapper
 
 SEED = 42
 HORIZON = 5 * 12 * 8
-UNITS_TO_SELL = 240
+UNITS_TO_SELL = 250
 
 env = TradeExecutionEnv()
 
@@ -19,17 +19,25 @@ trade_sizes = {
   6: 32,
   7: 64,
   8: 128,
-  9: 240
+  9: 250
 }
 env = DiscreteTradeSizeWrapper(env, trade_sizes)
 
+def parse_state(state, action):
+    data = np.vstack([
+        state["low"].to_numpy(),
+        state["high"].to_numpy(),
+        state["close"].to_numpy(),
+        state["open"].to_numpy(),
+        state["volume"].to_numpy(),
+    ]).T[-1,:]
+    return np.concatenate([data, np.array([action]), np.array([state["units_sold"]]), np.array([state["cost_basis"]]), np.array([1])])
+
 def Q(state, action, theta):
-    features = np.array([state["open"], state["high"], state["low"], state["close"], state["volume"], state["units_to_sell"] - state["units_sold"], trade_sizes[action], 1])
-    return theta @ features
+    return theta @ parse_state(state, action)
 
 def Q_gradient(state, action):
-    features = np.array([state["open"], state["high"], state["low"], state["close"], state["volume"], state["units_to_sell"] - state["units_sold"], trade_sizes[action], 1])
-    return features
+    return parse_state(state, action)
 
 def epsilon_greedy_policy(state, theta, num_actions, epsilon=0.1):
     if np.random.uniform(0, 1) < epsilon:
@@ -53,8 +61,21 @@ class ReplayBuffer:
         return np.asarray(self.buffer)[idx]
 
 
+def evaluate_fixed_target_Q_learning(env, theta, num_episodes):
+    rewards = []
+    for _ in tqdm(range(num_episodes)):
+        done = False
+        state = env.reset(UNITS_TO_SELL, HORIZON, SEED)
+        while not done:
+            action = epsilon_greedy_policy(state, theta, env.action_space.n, 0)
+            next_state, reward, done, _, _ = env.step(action)
+            state = next_state
+        rewards.append(reward)
+    return np.mean(rewards)
+
+
 def fixed_target_Q_learning(env, num_episodes, alpha=0.001, gamma=1, epsilon=0.1, buff_size=1000, batch_size=32):
-    theta = np.zeros(8)
+    theta = np.zeros(9)
     theta_prime = theta.copy()
     replay_buffer = ReplayBuffer(buff_size)
     t = 0
@@ -63,7 +84,6 @@ def fixed_target_Q_learning(env, num_episodes, alpha=0.001, gamma=1, epsilon=0.1
         state = env.reset(UNITS_TO_SELL, HORIZON, SEED)
         while not done:
             action = epsilon_greedy_policy(state, theta, env.action_space.n, epsilon)
-            print(action)
             next_state, reward, done, _, _ = env.step(action)
             replay_buffer.add((state, action, reward, next_state, done))
             batch = replay_buffer.sample(batch_size)
@@ -80,5 +100,6 @@ def fixed_target_Q_learning(env, num_episodes, alpha=0.001, gamma=1, epsilon=0.1
     return theta
 
 if __name__ == "__main__":
-    theta = fixed_target_Q_learning(env, 50)
-    print(theta)
+    theta = fixed_target_Q_learning(env, 300)
+    print(f"Mean reward: {evaluate_fixed_target_Q_learning(env, theta, 20)}")
+    print(f"Theta = {theta}")

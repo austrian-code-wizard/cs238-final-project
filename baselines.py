@@ -29,11 +29,11 @@ def random_policy(env):
         obs = env.reset(UNITS_TO_SELL, HORIZON, SEED)
         while not done:
             np.random.seed(i)
-            action = np.random.randint(0, obs["units_to_sell"] - obs["units_sold"] +1)
+            action = np.random.randint(0, env.units_to_sell - env.units_sold +1)
 
             # Force random policy to sell all units
             if env.current_step + 1 >= env.horizon:
-                action = obs["units_to_sell"] - obs["units_sold"]
+                action = env.units_to_sell - env.units_sold
             obs, reward, done, _, _ = env.step(action)
         rewards.append(reward)
     return np.mean(rewards)
