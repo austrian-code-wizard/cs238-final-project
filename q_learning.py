@@ -100,6 +100,6 @@ def fixed_target_Q_learning(env, num_episodes, alpha=0.001, gamma=1, epsilon=0.1
     return theta
 
 if __name__ == "__main__":
-    theta = fixed_target_Q_learning(env, 2000)
+    theta = fixed_target_Q_learning(env, 300)
     print(f"Mean reward: {evaluate_fixed_target_Q_learning(env, theta, 20)}")
     print(f"Theta = {theta}")
