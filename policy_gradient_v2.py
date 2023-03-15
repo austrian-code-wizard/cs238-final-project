@@ -42,11 +42,28 @@ class Actor(nn.Module):
         super(Actor, self).__init__()
         self.state_size = state_size
         self.action_size = action_size
-        self.linear1 = nn.Linear(self.state_size, 128)
+        self.linear1 = nn.Linear(state_size, 128)
         self.linear2 = nn.Linear(128, 256)
-        self.linear3 = nn.Linear(256, self.action_size)
+        self.linear3 = nn.Linear(256, action_size)
 
+    def _parse_state(self, state):
+        data = torch.FloatTensor(np.stack([
+            state["low"].to_numpy(),
+            state["high"].to_numpy(),
+            state["close"].to_numpy(),
+            state["open"].to_numpy(),
+            state["volume"].to_numpy(),
+        ])).T
+        return torch.concat([
+            data,
+            torch.repeat_interleave(torch.FloatTensor([[state["units_sold"]]]), 6, 0),
+            torch.repeat_interleave(torch.FloatTensor([[state["cost_basis"]]]), 6, 0),
+            torch.repeat_interleave(torch.FloatTensor([[state["steps_left"]]]), 6, 0),
+        ], dim=1)[..., -1, :]
+    
     def forward(self, state):
+        state = torch.stack([self._parse_state(state)] if isinstance(state, dict) else [self._parse_state(s) for s in state])
+        state = state.to(device)
         output = F.relu(self.linear1(state))
         output = F.relu(self.linear2(output))
         output = self.linear3(output)
@@ -62,13 +79,45 @@ class Critic(nn.Module):
         self.linear1 = nn.Linear(self.state_size, 128)
         self.linear2 = nn.Linear(128, 256)
         self.linear3 = nn.Linear(256, 1)
+    
+    def _parse_state(self, state):
+        data = torch.FloatTensor(np.stack([
+            state["low"].to_numpy(),
+            state["high"].to_numpy(),
+            state["close"].to_numpy(),
+            state["open"].to_numpy(),
+            state["volume"].to_numpy(),
+        ])).T
+        return torch.concat([
+            data,
+            torch.repeat_interleave(torch.FloatTensor([[state["units_sold"]]]), 6, 0),
+            torch.repeat_interleave(torch.FloatTensor([[state["cost_basis"]]]), 6, 0),
+            torch.repeat_interleave(torch.FloatTensor([[state["steps_left"]]]), 6, 0),
+        ], dim=1)[..., -1, :]
 
     def forward(self, state):
+        state = torch.stack([self._parse_state(state)] if isinstance(state, dict) else [self._parse_state(s) for s in state])
+        state = state.to(device)
         output = F.relu(self.linear1(state))
         output = F.relu(self.linear2(output))
         value = self.linear3(output)
         return value
+    
 
+def parse_state(state):
+        data = torch.FloatTensor(np.stack([
+            state["low"].to_numpy(),
+            state["high"].to_numpy(),
+            state["close"].to_numpy(),
+            state["open"].to_numpy(),
+            state["volume"].to_numpy(),
+        ])).T
+        return torch.concat([
+            data,
+            torch.repeat_interleave(torch.FloatTensor([[state["units_sold"]]]), 6, 0),
+            torch.repeat_interleave(torch.FloatTensor([[state["cost_basis"]]]), 6, 0),
+            torch.repeat_interleave(torch.FloatTensor([[state["steps_left"]]]), 6, 0),
+        ], dim=1)[..., -1, :]
 
 def compute_returns(next_value, rewards, masks, gamma=0.99):
     R = next_value
@@ -84,7 +133,6 @@ def trainIters(actor, critic, n_iters):
     optimizerC = optim.Adam(critic.parameters())
     for iter in range(n_iters):
         state = env.reset(UNITS_TO_SELL, HORIZON, SEED)
-        state = [state["open"], state["high"], state["low"], state["close"], state["volume"], UNITS_TO_SELL - state["units_sold"]]
         log_probs = []
         values = []
         rewards = []
@@ -94,11 +142,11 @@ def trainIters(actor, critic, n_iters):
 
         for i in count():
             # env.render()
-            state = torch.FloatTensor(state).to(device)
+            # state = torch.FloatTensor(state).to(device)
             dist, value = actor(state), critic(state)
 
             action = dist.sample()
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, _, _ = env.step(action.item())
 
             log_prob = dist.log_prob(action).unsqueeze(0)
             entropy += dist.entropy().mean()
@@ -111,11 +159,12 @@ def trainIters(actor, critic, n_iters):
             state = next_state
 
             if done:
-                print('Iteration: {}, Score: {}'.format(iter, i))
+                print(i)
+                print('Iteration: {}, Reward: {}'.format(iter, sum(rewards)))
                 break
 
 
-        next_state = torch.FloatTensor(next_state).to(device)
+        # next_state = torch.FloatTensor(next_state).to(device)
         next_value = critic(next_state)
         returns = compute_returns(next_value, rewards, masks)
 
@@ -140,14 +189,14 @@ def trainIters(actor, critic, n_iters):
 
 
 if __name__ == '__main__':
-    if os.path.exists('model/actor.pkl'):
-        actor = torch.load('model/actor.pkl')
-        print('Actor Model loaded')
-    else:
-        actor = Actor(state_size, action_size).to(device)
-    if os.path.exists('model/critic.pkl'):
-        critic = torch.load('model/critic.pkl')
-        print('Critic Model loaded')
-    else:
-        critic = Critic(state_size, action_size).to(device)
-    trainIters(actor, critic, n_iters=100)
+    # if os.path.exists('model/actor.pkl'):
+    #     actor = torch.load('model/actor.pkl')
+    #     print('Actor Model loaded')
+    # else:
+    actor = Actor(state_size, action_size).to(device)
+    # if os.path.exists('model/critic.pkl'):
+    #     critic = torch.load('model/critic.pkl')
+    #     print('Critic Model loaded')
+    # else:
+    critic = Critic(state_size, action_size).to(device)
+    trainIters(actor, critic, n_iters=1000)
