@@ -51,17 +51,29 @@ def epsilon_greedy_policy(state, theta, num_actions, epsilon=0.1):
     else:
         return np.argmax([Q(state, a, theta) for a in range(num_actions)])
 
+def increment_transition_counts(dict, state, action, next_state):
+    #create an item for the specific transition
+    if (state, action) not in transition_prob_dict.keys():
+        dict[(state, action)] = np.zeros(3)
+    
+    #increment the value
+
+    transition_num =  
 
 def MDP_transiion_counts(env, num_episodes, epsilon=0.1, buff_size=1000, batch_size=32):
     state = env.reset(UNITS_TO_SELL, HORIZON, SEED) 
+    #initialize dictionary
+    transition_prob_dict = {}
+    #initialize dictionary with all the state, action pairs (tuple) and all the possible states as a vector)
     while not done:
         action == epsilon_greedy_policy(state, theta, env.action_space.n, epsilon)
         next_state, reward, done, _, _ = env.step(action)
         replay_buffer.add((state, action, reward, next_state, done))
         batch = replay_buffer.sample(batch_size)
         rewards += reward
-        #create an item for the specific transition
-        transition_num = 
+        increment_transition_counts(transition_prob_dict, state, action, next_state)
+
+
 
 
 #if action == sell:
