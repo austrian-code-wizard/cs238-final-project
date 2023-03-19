@@ -146,7 +146,7 @@ targetQNetwork.load_state_dict(onlineQNetwork.state_dict())
 optimizer = torch.optim.Adam(onlineQNetwork.parameters(), lr=1e-4)
 writer = SummaryWriter('logs/dqn')
 
-GAMMA = 1
+GAMMA = 0.99
 EXPLORE = 4000
 INITIAL_EPSILON = 0.1
 FINAL_EPSILON = 0.0001
