@@ -34,15 +34,16 @@ def random_policy(env):
     for i in range(EVAL_EPOCHS):
         done = False
         reward = 0
-        obs = env.reset(UNITS_TO_SELL, HORIZON, SEED+i, test=True)
+        obs = env.reset(UNITS_TO_SELL, HORIZON, SEED, test=False)
         episode_rewards = 0
         while not done:
             np.random.seed(i)
-            action = np.random.randint(0, env.units_to_sell - env.units_sold +1)
+            #action = np.random.randint(0, env.units_to_sell - env.units_sold +1)
 
             # Force random policy to sell all units
-            if env.current_step + 1 >= env.horizon:
-                action = env.units_to_sell - env.units_sold
+            #if env.current_step + 1 >= env.horizon:
+            #    action = env.units_to_sell - env.units_sold
+            action = int(np.random.choice([i for i in range(0, UNITS_TO_SELL+1, 2)]))
             obs, reward, done, _, _ = env.step(action)
             episode_rewards += reward
         rewards.append(episode_rewards)
