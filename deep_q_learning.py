@@ -1,5 +1,6 @@
 """Dueling DQN taken from here: https://github.com/gouxiangchen/dueling-DQN-pytorch/blob/master/dueling_dqn.py"""
 
+import json
 import torch
 from torch import nn
 import numpy as np
@@ -12,22 +13,23 @@ from tensorboardX import SummaryWriter
 
 
 SEED = 42
-HORIZON = 5 * 12 * 8
-UNITS_TO_SELL = 250
+HORIZON = 5 * 12 * 2
+UNITS_TO_SELL = 64
+GAMMA = 0.99
+EXPLORE = 500
+INITIAL_EPSILON = 0.1
+FINAL_EPSILON = 0.0001
+REPLAY_MEMORY = 20000
+BATCH = 16
+EPOCHS = 300
+EVAL_EPOCHS = 50
+UPDATE_STEPS = 4
+EXP_NAME = "dueling_ddqn_meta_mdp_train.json"
 
 env = TradeExecutionEnv()
 
 trade_sizes = {
-  0: 0,
-  1: 1,
-  2: 2,
-  3: 4,
-  4: 8,
-  5: 16,
-  6: 32,
-  7: 64,
-  8: 128,
-  9: 250
+  i: i*2 for i in range(33)
 }
 env = DiscreteTradeSizeWrapper(env, trade_sizes)
 
@@ -146,17 +148,6 @@ targetQNetwork.load_state_dict(onlineQNetwork.state_dict())
 optimizer = torch.optim.Adam(onlineQNetwork.parameters(), lr=1e-4)
 writer = SummaryWriter('logs/dqn')
 
-GAMMA = 1
-EXPLORE = 4000
-INITIAL_EPSILON = 0.1
-FINAL_EPSILON = 0.0001
-REPLAY_MEMORY = 20000
-BATCH = 16
-EPOCHS = 5000
-EVAL_EPOCHS = 100
-
-UPDATE_STEPS = 4
-
 memory_replay = Memory(REPLAY_MEMORY)
 
 epsilon = INITIAL_EPSILON
@@ -165,10 +156,10 @@ begin_learn = False
 
 episode_reward = 0
 
-# onlineQNetwork.load_state_dict(torch.load('ddqn-policy.para'))
+train_rewards = []
 for epoch in range(EPOCHS):
 
-    state = env.reset(UNITS_TO_SELL, HORIZON, SEED)
+    state = env.reset(UNITS_TO_SELL, HORIZON, SEED+epoch)
     episode_reward = 0
     done = False
     while not done:
@@ -212,12 +203,13 @@ for epoch in range(EPOCHS):
         if done:
             break
         state = next_state
+    train_rewards.append(episode_reward)
     writer.add_scalar('episode reward', episode_reward, global_step=epoch)
     if epoch % 10 == 0:
         torch.save(onlineQNetwork.state_dict(), 'ddqn-policy.para')
         print('Ep {}\tMoving average score: {:.2f}\t'.format(epoch, episode_reward))
 
-rewards = []
+same_mdp_eval_rewards = []
 for epoch in range(EVAL_EPOCHS):
     state = env.reset(UNITS_TO_SELL, HORIZON, SEED)
     episode_reward = 0
@@ -229,5 +221,43 @@ for epoch in range(EVAL_EPOCHS):
         if done:
             break
         state = next_state
-    rewards.append(episode_reward)
-print('Average reward: {}'.format(np.mean(rewards)))
+    same_mdp_eval_rewards.append(episode_reward)
+print('Average reward: {}'.format(np.mean(same_mdp_eval_rewards)))
+
+train_mdp_eval_rewards = []
+for epoch in range(EVAL_EPOCHS):
+    state = env.reset(UNITS_TO_SELL, HORIZON, SEED+epoch)
+    episode_reward = 0
+    done = False
+    while not done:
+        action = onlineQNetwork.select_action(state)
+        next_state, reward, done, _, _ = env.step(action)
+        episode_reward += reward
+        if done:
+            break
+        state = next_state
+    train_mdp_eval_rewards.append(episode_reward)
+print('Average reward: {}'.format(np.mean(train_mdp_eval_rewards)))
+
+test_mdp_eval_rewards = []
+for epoch in range(EVAL_EPOCHS):
+    state = env.reset(UNITS_TO_SELL, HORIZON, SEED+epoch, test=True)
+    episode_reward = 0
+    done = False
+    while not done:
+        action = onlineQNetwork.select_action(state)
+        next_state, reward, done, _, _ = env.step(action)
+        episode_reward += reward
+        if done:
+            break
+        state = next_state
+    test_mdp_eval_rewards.append(episode_reward)
+print('Average reward: {}'.format(np.mean(test_mdp_eval_rewards)))
+
+with open(f"./results/{EXP_NAME}", "w+") as f:
+    json.dump({
+        "train_rewards": train_rewards,
+        "same_mdp_eval_rewards": same_mdp_eval_rewards,
+        "train_mdp_eval_rewards": train_mdp_eval_rewards,
+        "test_mdp_eval_rewards": test_mdp_eval_rewards
+    }, f)

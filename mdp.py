@@ -28,9 +28,17 @@ class TradeExecutionEnv(gym.Env):
         self.min_price = min(self._data["High"].min(), self._data["Low"].min(), self._data["Open"].min(), self._data["Close"].min())
         self.max_volume = self._data["Volume"].max()
         self.min_volume = self._data["Volume"].min()
+        self._train_data = self._data[:int(len(self._data) * 0.8)]
+        self._test_data = self._data[int(len(self._data) * 0.8):]
+        self._data = self._train_data
 
     
-    def reset(self, units_to_sell, horizon, seed=0):
+    def reset(self, units_to_sell, horizon, seed=0, test=False):
+        if test:
+            self._data = self._test_data
+        else:
+            self._data = self._train_data
+
         self.units_to_sell = units_to_sell
         self.units_sold = 0
         self.total_income = 0
@@ -96,6 +104,19 @@ class DiscreteTradeSizeWrapper(gym.Wrapper):
 
     def step(self, action):
         return self.env.step(self.trade_sizes[action])
+
+    def reset(self, *args, **kwargs):
+        return self.env.reset(*args, **kwargs)
+
+
+class RelativeTradeSizeWrapper(gym.Wrapper):
+    def __init__(self, env, trade_sizes):
+        super().__init__(env)
+        self.trade_sizes = trade_sizes
+        self.action_space = gym.spaces.Discrete(len(trade_sizes))
+
+    def step(self, action):
+        return self.env.step(int(np.trunc(self.trade_sizes[action] * (self.env.units_to_sell - self.env.units_sold))))
 
     def reset(self, *args, **kwargs):
         return self.env.reset(*args, **kwargs)

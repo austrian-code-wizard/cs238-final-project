@@ -2,40 +2,51 @@ import numpy as np
 from mdp import TradeExecutionEnv
 
 SEED = 42
-HORIZON = 5 * 12 * 8
-UNITS_TO_SELL = 240
+HORIZON = 5 * 12 * 2
+UNITS_TO_SELL = 64
+EVAL_EPOCHS = 50
+EPOCHS = 300
+BATCH_SIZE = 32
 
 
 def average_policy(env):
     done = False
     reward = 0
     i = 0
-    env.reset(UNITS_TO_SELL, HORIZON, SEED)
-    while not done:
-        # Assumes that horizon is divisible by units_to_sell
-        action = 1 if i % (HORIZON // UNITS_TO_SELL) == 0 else 0
-        i += 1
-        _, reward, done, _, _ = env.step(action)
-    return reward
+    rewards = []
+    for i in range(EVAL_EPOCHS):
+        env.reset(UNITS_TO_SELL, HORIZON, SEED+i, test=True)
+        episode_reward = 0
+        while not done:
+            # Assumes that horizon is divisible by units_to_sell
+            action = 1 if i % (HORIZON // UNITS_TO_SELL) == 0 else 0
+            i += 1
+            _, reward, done, _, _ = env.step(action)
+            episode_reward += reward
+        rewards.append(episode_reward)
+    return np.mean(rewards)
 
 
 def random_policy(env):
     rewards = []
 
     # Iterate over 100 episodes to get the average reward
-    for i in range(100):
+    for i in range(EVAL_EPOCHS):
         done = False
         reward = 0
-        obs = env.reset(UNITS_TO_SELL, HORIZON, SEED)
+        obs = env.reset(UNITS_TO_SELL, HORIZON, SEED, test=False)
+        episode_rewards = 0
         while not done:
             np.random.seed(i)
-            action = np.random.randint(0, env.units_to_sell - env.units_sold +1)
+            #action = np.random.randint(0, env.units_to_sell - env.units_sold +1)
 
             # Force random policy to sell all units
-            if env.current_step + 1 >= env.horizon:
-                action = env.units_to_sell - env.units_sold
+            #if env.current_step + 1 >= env.horizon:
+            #    action = env.units_to_sell - env.units_sold
+            action = int(np.random.choice([i for i in range(0, UNITS_TO_SELL+1, 2)]))
             obs, reward, done, _, _ = env.step(action)
-        rewards.append(reward)
+            episode_rewards += reward
+        rewards.append(episode_rewards)
     return np.mean(rewards)
 
 
