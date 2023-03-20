@@ -33,9 +33,9 @@ env = DiscreteTradeSizeWrapper(env, trade_sizes)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-state_size = 8
+state_size = 9
 action_size = env.action_space.n
-lr = 0.0001
+lr = 0.001
 
 class Actor(nn.Module):
     def __init__(self, state_size, action_size):
@@ -59,6 +59,7 @@ class Actor(nn.Module):
             torch.repeat_interleave(torch.FloatTensor([[state["units_sold"]]]), 6, 0),
             torch.repeat_interleave(torch.FloatTensor([[state["cost_basis"]]]), 6, 0),
             torch.repeat_interleave(torch.FloatTensor([[state["steps_left"]]]), 6, 0),
+            torch.repeat_interleave(torch.FloatTensor([[state["time"]]]), 6, 0)
         ], dim=1)[..., -1, :]
     
     def forward(self, state):
@@ -93,6 +94,7 @@ class Critic(nn.Module):
             torch.repeat_interleave(torch.FloatTensor([[state["units_sold"]]]), 6, 0),
             torch.repeat_interleave(torch.FloatTensor([[state["cost_basis"]]]), 6, 0),
             torch.repeat_interleave(torch.FloatTensor([[state["steps_left"]]]), 6, 0),
+            torch.repeat_interleave(torch.FloatTensor([[state["time"]]]), 6, 0)
         ], dim=1)[..., -1, :]
 
     def forward(self, state):
@@ -117,6 +119,7 @@ def parse_state(state):
             torch.repeat_interleave(torch.FloatTensor([[state["units_sold"]]]), 6, 0),
             torch.repeat_interleave(torch.FloatTensor([[state["cost_basis"]]]), 6, 0),
             torch.repeat_interleave(torch.FloatTensor([[state["steps_left"]]]), 6, 0),
+            torch.repeat_interleave(torch.FloatTensor([[state["time"]]]), 6, 0)
         ], dim=1)[..., -1, :]
 
 def compute_returns(next_value, rewards, masks, gamma=0.99):
@@ -138,7 +141,7 @@ def trainIters(actor, critic, n_iters):
         rewards = []
         masks = []
         entropy = 0
-        # env.reset()
+        # state = env.reset(UNITS_TO_SELL, HORIZON, SEED)
 
         for i in count():
             # env.render()
@@ -159,7 +162,6 @@ def trainIters(actor, critic, n_iters):
             state = next_state
 
             if done:
-                print(i)
                 print('Iteration: {}, Reward: {}'.format(iter, sum(rewards)))
                 break
 

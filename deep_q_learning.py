@@ -91,6 +91,7 @@ class QRNNetwork(nn.Module):
             torch.repeat_interleave(torch.FloatTensor([[state["units_sold"]]]), 6, 0),
             torch.repeat_interleave(torch.FloatTensor([[state["cost_basis"]]]), 6, 0),
             torch.repeat_interleave(torch.FloatTensor([[state["steps_left"]]]), 6, 0),
+            torch.repeat_interleave(torch.FloatTensor([[state["time"]]]), 6, 0),
         ], dim=1)
 
     def forward(self, state):

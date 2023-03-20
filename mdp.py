@@ -17,7 +17,8 @@ class TradeExecutionEnv(gym.Env):
             "volume": Box(low=0, high=np.inf, shape=(6,)),
             "units_sold": Box(low=0, high=np.inf, shape=(1,)),
             "cost_basis": Box(low=0, high=np.inf, shape=(1,)),
-            "steps_left": Box(low=0, high=np.inf, shape=(1,))
+            "steps_left": Box(low=0, high=np.inf, shape=(1,)),
+            "time": Box(low=0, high=np.inf, shape=(1,))
         }
         self.units_sold = None
         self.units_to_sell = None
@@ -28,6 +29,9 @@ class TradeExecutionEnv(gym.Env):
         self.min_price = min(self._data["High"].min(), self._data["Low"].min(), self._data["Open"].min(), self._data["Close"].min())
         self.max_volume = self._data["Volume"].max()
         self.min_volume = self._data["Volume"].min()
+        self.min_time = self._data["Timestamp"].min()
+        self.max_time = self._data["Timestamp"].max()
+        self.time = None
 
     
     def reset(self, units_to_sell, horizon, seed=0):
@@ -42,6 +46,9 @@ class TradeExecutionEnv(gym.Env):
         self.min_price = min(self._data.iloc[int(self._start-6):int(self.horizon+1)]["High"].min(), self._data.iloc[int(self._start-6):int(self.horizon+1)]["Low"].min(), self._data.iloc[int(self._start-6):int(self.horizon+1)]["Open"].min(), self._data.iloc[int(self._start-6):int(self.horizon+1)]["Close"].min())
         self.max_volume = self._data.iloc[int(self._start-6):int(self.horizon+1)]["Volume"].max()
         self.min_volume = self._data.iloc[int(self._start-6):int(self.horizon+1)]["Volume"].min()
+        self.min_time = self._data["Timestamp"].min()
+        self.max_time = self._data["Timestamp"].max()
+        self.time = self._data.iloc[int(self.horizon+1)]["Timestamp"]
         return self._get_observation()
 
     def step(self, action):
@@ -61,6 +68,9 @@ class TradeExecutionEnv(gym.Env):
             done = True
         return self._get_observation(), self._get_reward(done), done, False, {}
 
+    def normalize_time(self, time):
+        return (time-self.min_time)/(self.max_time-self.min_time)
+
     def normalize_price(self, price):
         return 2 * (price - self.min_price) / (self.max_price - self.min_price) - 1
 
@@ -76,7 +86,8 @@ class TradeExecutionEnv(gym.Env):
             "volume": self.normalize_volume(self._data.iloc[self.current_step - 6 : self.current_step]["Volume"]),
             "units_sold": self.units_sold / self.units_to_sell,
             "cost_basis": self.normalize_price(self.total_income / self.units_sold) if self.units_sold > 0 else 0,
-            "steps_left": (self.horizon - self.current_step) / (self.horizon - self._start)
+            "steps_left": (self.horizon - self.current_step) / (self.horizon - self._start),
+            "time": self.normalize_time(self._data.iloc[self.current_step]["Timestamp"])
         }
 
     def _get_reward(self, done):
